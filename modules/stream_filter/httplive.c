@@ -2116,13 +2116,32 @@ static int Open(vlc_object_t *p_this)
         goto fail;
     }
     free(buffer);
+
+    /* HLS standard is clear we should start with the first stream,
+       so save it's ID and bandwidth before sorting. */
+    hls_stream_t *first_stream = hls_GetFirst(p_sys->hls_stream);
+    int first_stream_id = first_stream->id;
+    uint64_t first_stream_bandwidth = first_stream->bandwidth;
+
     /* HLS standard doesn't provide any guaranty about streams
        being sorted by bandwidth, so we sort them */
     qsort( p_sys->hls_stream->pp_elems, p_sys->hls_stream->i_count,
            sizeof( hls_stream_t* ), &hls_CompareStreams );
 
-    /* Choose first HLS stream to start with */
-    int current = p_sys->playback.stream = p_sys->hls_stream->i_count-1;
+    int count = vlc_array_count(p_sys->hls_stream);
+    int current = count - 1; /* Default to the last stream if we don't find a match. */
+
+    for (int i = 0; i < count; i++)
+    {
+        hls_stream_t *hls = hls_Get(p_sys->hls_stream, i);
+        if (!hls) continue;
+        if (hls->id != first_stream_id) continue;
+        if (hls->bandwidth != first_stream_bandwidth) continue;
+        current = i;
+        break;
+    }
+
+    p_sys->playback.stream = current;
     p_sys->playback.segment = p_sys->download.segment = ChooseSegment(s, current);
 
     /* manage encryption key if needed */
