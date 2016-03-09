@@ -1642,12 +1642,16 @@ static int hls_DownloadSegmentData(stream_t *s, hls_stream_t *hls, segment_t *se
                 segment->sequence, *cur_stream);
 
     uint64_t bw = segment->size * 8 * 1000000 / __MAX(1, duration); /* bits / s */
-    p_sys->bandwidth = bw;
-    if (p_sys->b_meta && (hls->bandwidth != bw))
+    const double alpha = 0.25;
+    p_sys->bandwidth = (alpha * bw) + (1.0 - alpha) * p_sys->bandwidth;
+    if (p_sys->b_meta)
     {
+        bw = p_sys->bandwidth;
         int newstream = BandwidthAdaptation(s, hls->id, &bw);
 
-        /* FIXME: we need an average here */
+        /* FIXME: Bandwidth target averaging works quite well, but need to handle
+*          almost exactly matching the target bandwidth of a stream, which can
+*          cause flip-flopping between 2 streams. */
         if ((newstream >= 0) && (newstream != *cur_stream))
         {
             msg_Dbg(s, "detected %s bandwidth (%"PRIu64") stream",
