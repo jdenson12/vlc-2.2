@@ -30,6 +30,11 @@
 #include <vlc_cpu.h>
 #include <assert.h>
 
+// Disable SSE2 due to crashes in DXVA2 decoding
+#ifdef CAN_COMPILE_SSE2
+#undef CAN_COMPILE_SSE2
+#endif
+
 #include "copy.h"
 
 int CopyInitCache(copy_cache_t *cache, unsigned width)
