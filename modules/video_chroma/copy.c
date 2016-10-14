@@ -391,16 +391,18 @@ void CopyFromNv12(picture_t *dst, uint8_t *src[2], size_t src_pitch[2],
     (void) cache;
 #endif
 
+    char workingDir[PATH_MAX];
+    getcwd(workingDir, sizeof(workingDir);
     static unsigned frameCounter = 0;
     char frameFilename[256];
     sprintf(frameFilename, "nv12_frame_%u_0.bin", frameCounter);
     FILE *frameFile = fopen(frameFilename, "wb");
-    msg_Err(NULL, "Writing plane to %s", frameFilename);
+    printf("Writing plane to %s/%s", workingDir, frameFilename);
     fwrite(src[0], sizeof(uint8_t), width * height, frameFile);
     fclose(frameFile);
     sprintf(frameFilename, "nv12_frame_%u_1.bin", frameCounter);
     frameFile = fopen(frameFilename, "wb");
-    msg_Err(NULL, "Writing plane to %s", frameFilename);
+    printf("Writing plane to %s/%s", workingDir, frameFilename);
     fwrite(src[1], sizeof(uint8_t), width * height, frameFile);
     fclose(frameFile);
 
@@ -426,16 +428,18 @@ void CopyFromYv12(picture_t *dst, uint8_t *src[3], size_t src_pitch[3],
     (void) cache;
 #endif
 
+    char workingDir[PATH_MAX];
+    getcwd(workingDir, sizeof(workingDir);
     static unsigned frameCounter = 0;
-    char frameFilename[256];
+    char frameFilename[PATH_MAX];
     sprintf(frameFilename, "yv12_frame_%u_0.bin", frameCounter);
     FILE *frameFile = fopen(frameFilename, "wb");
-    msg_Err(NULL, "Writing plane to %s", frameFilename);
+    printf("Writing plane to %s/%s", workingDir, frameFilename);
     fwrite(src[0], sizeof(uint8_t), width * height, frameFile);
     fclose(frameFile);
     sprintf(frameFilename, "yv12_frame_%u_1.bin", frameCounter);
     frameFile = fopen(frameFilename, "wb");
-    msg_Err(NULL, "Writing plane to %s", frameFilename);
+    printf("Writing plane to %s/%s", workingDir, frameFilename);
     fwrite(src[1], sizeof(uint8_t), width * height, frameFile);
     fclose(frameFile);
 
