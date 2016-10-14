@@ -392,7 +392,7 @@ void CopyFromNv12(picture_t *dst, uint8_t *src[2], size_t src_pitch[2],
 #endif
 
     char workingDir[4096];
-    getcwd(workingDir, sizeof(workingDir);
+    getcwd(workingDir, sizeof(workingDir));
     static unsigned frameCounter = 0;
     char frameFilename[4096];
     sprintf(frameFilename, "nv12_frame_%u_0.bin", frameCounter);
@@ -429,7 +429,7 @@ void CopyFromYv12(picture_t *dst, uint8_t *src[3], size_t src_pitch[3],
 #endif
 
     char workingDir[4096];
-    getcwd(workingDir, sizeof(workingDir);
+    getcwd(workingDir, sizeof(workingDir));
     static unsigned frameCounter = 0;
     char frameFilename[4096];
     sprintf(frameFilename, "yv12_frame_%u_0.bin", frameCounter);
