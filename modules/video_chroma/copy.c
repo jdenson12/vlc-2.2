@@ -30,11 +30,6 @@
 #include <vlc_cpu.h>
 #include <assert.h>
 
-// Disable SSE2 due to crashes in DXVA2 decoding
-#ifdef CAN_COMPILE_SSE2
-#undef CAN_COMPILE_SSE2
-#endif
-
 #include "copy.h"
 
 int CopyInitCache(copy_cache_t *cache, unsigned width)
@@ -391,21 +386,6 @@ void CopyFromNv12(picture_t *dst, uint8_t *src[2], size_t src_pitch[2],
     (void) cache;
 #endif
 
-    char workingDir[4096];
-    getcwd(workingDir, sizeof(workingDir));
-    static unsigned frameCounter = 0;
-    char frameFilename[4096];
-    sprintf(frameFilename, "nv12_frame_%u_0.bin", frameCounter);
-    FILE *frameFile = fopen(frameFilename, "wb");
-    printf("Writing plane to %s/%s", workingDir, frameFilename);
-    fwrite(src[0], sizeof(uint8_t), width * height, frameFile);
-    fclose(frameFile);
-    sprintf(frameFilename, "nv12_frame_%u_1.bin", frameCounter);
-    frameFile = fopen(frameFilename, "wb");
-    printf("Writing plane to %s/%s", workingDir, frameFilename);
-    fwrite(src[1], sizeof(uint8_t), width * height, frameFile);
-    fclose(frameFile);
-
     CopyPlane(dst->p[0].p_pixels, dst->p[0].i_pitch,
               src[0], src_pitch[0],
               width, height);
@@ -427,21 +407,6 @@ void CopyFromYv12(picture_t *dst, uint8_t *src[3], size_t src_pitch[3],
 #else
     (void) cache;
 #endif
-
-    char workingDir[4096];
-    getcwd(workingDir, sizeof(workingDir));
-    static unsigned frameCounter = 0;
-    char frameFilename[4096];
-    sprintf(frameFilename, "yv12_frame_%u_0.bin", frameCounter);
-    FILE *frameFile = fopen(frameFilename, "wb");
-    printf("Writing plane to %s/%s", workingDir, frameFilename);
-    fwrite(src[0], sizeof(uint8_t), width * height, frameFile);
-    fclose(frameFile);
-    sprintf(frameFilename, "yv12_frame_%u_1.bin", frameCounter);
-    frameFile = fopen(frameFilename, "wb");
-    printf("Writing plane to %s/%s", workingDir, frameFilename);
-    fwrite(src[1], sizeof(uint8_t), width * height, frameFile);
-    fclose(frameFile);
 
      CopyPlane(dst->p[0].p_pixels, dst->p[0].i_pitch,
                src[0], src_pitch[0], width, height);
