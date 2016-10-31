@@ -359,8 +359,10 @@ static int Extract(vlc_va_t *va, picture_t *picture, void *opaque,
     vlc_va_sys_t *sys = va->sys;
     LPDIRECT3DSURFACE9 d3d = (LPDIRECT3DSURFACE9)(uintptr_t)data;
 
+#ifdef CAN_COMPILE_SSE2
     if (!sys->surface_cache.buffer)
         return VLC_EGENERIC;
+#endif
 
     /* */
     assert(sys->output == MAKEFOURCC('Y','V','1','2'));
