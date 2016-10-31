@@ -65,7 +65,11 @@ VLC_API unsigned vlc_CPU(void);
 #  define vlc_CPU_MMXEXT() ((vlc_CPU() & VLC_CPU_MMXEXT) != 0)
 #  define vlc_CPU_SSE() ((vlc_CPU() & VLC_CPU_SSE) != 0)
 #  if VLC_GCC_VERSION(4, 4) || defined(__clang__)
-#   define VLC_SSE __attribute__ ((__target__ ("sse")))
+#   if defined (_WIN32)
+#    define VLC_SSE __attribute__ ((__target__ ("sse"))) __attribute__ ((force_align_arg_pointer))
+#   else
+#    define VLC_SSE __attribute__ ((__target__ ("sse")))
+#   endif
 #  else
 #   define VLC_SSE VLC_SSE_is_not_implemented_on_this_compiler
 #  endif
