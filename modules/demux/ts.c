@@ -42,6 +42,7 @@
 #include <vlc_charset.h>   /* FromCharset, for EIT */
 
 #include "../mux/mpeg/csa.h"
+#include "../mux/mpeg/cissa.h"
 
 /* Include dvbpsi headers */
 # include <dvbpsi/dvbpsi.h>
@@ -107,6 +108,13 @@ static void Close ( vlc_object_t * );
 #define CSA2_LONGTEXT N_("The even CSA encryption key. This must be a " \
   "16 char string (8 hexadecimal bytes).")
 
+#define CISSA_TEXT N_("CISSA Key")
+#define CISSA_LONGTEXT N_("CISSA encryption key. This must be a " \
+  "32 char string (16 hexadecimal bytes).")
+
+#define CISSA2_TEXT N_("Second CISSA Key")
+#define CISSA2_LONGTEXT N_("The even CISSA encryption key. This must be a " \
+  "32 char string (16 hexadecimal bytes).")
 
 #define CPKT_TEXT N_("Packet size in bytes to decrypt")
 #define CPKT_LONGTEXT N_("Specify the size of the TS packet to decrypt. " \
@@ -144,6 +152,10 @@ vlc_module_begin ()
     add_string( "ts-csa2-ck", NULL, CSA2_TEXT, CSA2_LONGTEXT, true )
         change_safe()
     add_integer( "ts-csa-pkt", 188, CPKT_TEXT, CPKT_LONGTEXT, true )
+        change_safe()
+    add_string( "ts-cissa-ck", NULL, CISSA_TEXT, CISSA_LONGTEXT, true )
+        change_safe()
+    add_string( "ts-cissa2-ck", NULL, CISSA2_TEXT, CISSA2_LONGTEXT, true )
         change_safe()
 
     add_bool( "ts-split-es", true, SPLIT_ES_TEXT, SPLIT_ES_LONGTEXT, false )
@@ -277,6 +289,7 @@ typedef struct
 struct demux_sys_t
 {
     vlc_mutex_t     csa_lock;
+    vlc_mutex_t     cissa_lock;
 
     /* TS packet size (188, 192, 204) */
     int         i_packet_size;
@@ -310,6 +323,7 @@ struct demux_sys_t
     bool        b_es_id_pid;
     csa_t       *csa;
     int         i_csa_pkt_size;
+    cissa_t     *cissa;
     bool        b_split_es;
 
     bool        b_trust_pcr;
@@ -358,6 +372,7 @@ static void PSINewTableCallBack( demux_t *, dvbpsi_handle,
 #endif
 
 static int ChangeKeyCallback( vlc_object_t *, char const *, vlc_value_t, vlc_value_t, void * );
+static int ChangeCissaKeyCallback( vlc_object_t *, char const *, vlc_value_t, vlc_value_t, void * );
 
 static inline int PIDGet( block_t *p )
 {
@@ -575,6 +590,7 @@ static int Open( vlc_object_t *p_this )
         return VLC_ENOMEM;
     memset( p_sys, 0, sizeof( demux_sys_t ) );
     vlc_mutex_init( &p_sys->csa_lock );
+    vlc_mutex_init( &p_sys->cissa_lock );
 
     p_demux->pf_demux = Demux;
     p_demux->pf_control = Control;
@@ -604,6 +620,7 @@ static int Open( vlc_object_t *p_this )
     p_sys->i_packet_header_size = i_packet_header_size;
     p_sys->i_ts_read = 50;
     p_sys->csa = NULL;
+    p_sys->cissa = NULL;
     p_sys->b_start_record = false;
 
 #if (DVBPSI_VERSION_INT >= DVBPSI_VERSION_WANTED(1,0,0))
@@ -635,6 +652,7 @@ static int Open( vlc_object_t *p_this )
     if( !pat->psi->handle )
     {
         vlc_mutex_destroy( &p_sys->csa_lock );
+        vlc_mutex_destroy( &p_sys->cissa_lock );
         free( p_sys );
         return VLC_ENOMEM;
     }
@@ -643,6 +661,7 @@ static int Open( vlc_object_t *p_this )
     {
         vlc_dvbpsi_reset( p_demux );
         vlc_mutex_destroy( &p_sys->csa_lock );
+        vlc_mutex_destroy( &p_sys->cissa_lock );
         free( p_sys );
         return VLC_EGENERIC;
     }
@@ -753,6 +772,42 @@ static int Open( vlc_object_t *p_this )
             msg_Dbg( p_demux, "decrypting %d bytes of packet", p_sys->i_csa_pkt_size );
         }
         free( psz_csa2 );
+    }
+    free( psz_string );
+
+    psz_string = var_CreateGetStringCommand( p_demux, "ts-cissa-ck" );
+    if( psz_string && *psz_string )
+    {
+        int i_res;
+        char* psz_cissa2;
+
+        p_sys->cissa = cissa_New();
+
+        psz_cissa2 = var_CreateGetStringCommand( p_demux, "ts-cissa2-ck" );
+        i_res = cissa_SetCW( (vlc_object_t*)p_demux, p_sys->cissa, psz_string, true );
+        if( i_res == VLC_SUCCESS && psz_cissa2 && *psz_cissa2 )
+        {
+            if( cissa_SetCW( (vlc_object_t*)p_demux, p_sys->cissa, psz_cissa2, false ) != VLC_SUCCESS )
+            {
+                cissa_SetCW( (vlc_object_t*)p_demux, p_sys->cissa, psz_string, false );
+            }
+        }
+        else if ( i_res == VLC_SUCCESS )
+        {
+            cissa_SetCW( (vlc_object_t*)p_demux, p_sys->cissa, psz_string, false );
+        }
+        else
+        {
+            cissa_Delete( p_sys->cissa );
+            p_sys->cissa = NULL;
+        }
+
+        if( p_sys->cissa )
+        {
+            var_AddCallback( p_demux, "ts-cissa-ck", ChangeCissaKeyCallback, (void *)1 );
+            var_AddCallback( p_demux, "ts-cissa2-ck", ChangeCissaKeyCallback, NULL );
+        }
+        free( psz_cissa2 );
     }
     free( psz_string );
 
@@ -876,6 +931,15 @@ static void Close( vlc_object_t *p_this )
     }
     vlc_mutex_unlock( &p_sys->csa_lock );
 
+    vlc_mutex_lock( &p_sys->cissa_lock );
+    if( p_sys->cissa )
+    {
+        var_DelCallback( p_demux, "ts-cissa-ck", ChangeCissaKeyCallback, (void *)1 );
+        var_DelCallback( p_demux, "ts-cissa2-ck", ChangeCissaKeyCallback, NULL );
+        cissa_Delete( p_sys->cissa );
+    }
+    vlc_mutex_unlock( &p_sys->cissa_lock );
+
     TAB_CLEAN( p_sys->i_pmt, p_sys->pmt );
 
     free( p_sys->programs_list.p_values );
@@ -906,6 +970,28 @@ static int ChangeKeyCallback( vlc_object_t *p_this, char const *psz_cmd,
         i_tmp = csa_SetCW( p_this, p_sys->csa, newval.psz_string, false );
 
     vlc_mutex_unlock( &p_sys->csa_lock );
+    return i_tmp;
+}
+
+/*****************************************************************************
+ * ChangeKeyCallback: called when changing the odd cissa encryption key on the fly.
+ *****************************************************************************/
+static int ChangeCissaKeyCallback( vlc_object_t *p_this, char const *psz_cmd,
+                           vlc_value_t oldval, vlc_value_t newval,
+                           void *p_data )
+{
+    VLC_UNUSED(psz_cmd); VLC_UNUSED(oldval);
+    demux_t     *p_demux = (demux_t*)p_this;
+    demux_sys_t *p_sys = p_demux->p_sys;
+    int         i_tmp = (intptr_t)p_data;
+
+    vlc_mutex_lock( &p_sys->cissa_lock );
+    if ( i_tmp )
+        i_tmp = cissa_SetCW( p_this, p_sys->cissa, newval.psz_string, true );
+    else
+        i_tmp = cissa_SetCW( p_this, p_sys->cissa, newval.psz_string, false );
+
+    vlc_mutex_unlock( &p_sys->cissa_lock );
     return i_tmp;
 }
 
@@ -2304,6 +2390,12 @@ static bool GatherData( demux_t *p_demux, ts_pid_t *pid, block_t *p_bk )
         vlc_mutex_lock( &p_demux->p_sys->csa_lock );
         csa_Decrypt( p_demux->p_sys->csa, p_bk->p_buffer, p_demux->p_sys->i_csa_pkt_size );
         vlc_mutex_unlock( &p_demux->p_sys->csa_lock );
+    }
+    else if( p_demux->p_sys->cissa )
+    {
+        vlc_mutex_lock( &p_demux->p_sys->cissa_lock );
+        cissa_Decrypt( p_demux->p_sys->cissa, p_bk->p_buffer, TS_PACKET_SIZE_188);
+        vlc_mutex_unlock( &p_demux->p_sys->cissa_lock );
     }
 
     if( !b_adaptation )
